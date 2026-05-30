@@ -771,5 +771,6 @@ function generateDashboard(runs) {
     }
   </script>
 </body>
-</html>\`;
+</html>`;
+}`;
 }

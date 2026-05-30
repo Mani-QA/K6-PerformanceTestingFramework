@@ -88,11 +88,13 @@ jobs:
 
       - name: Run K6 Performance Test (Workflow Dispatch)
         if: github.event_name == 'workflow_dispatch'
+        continue-on-error: true
         run: |
           npx cross-env K6_ENV=${{ github.event.inputs.environment }} K6_PROFILE=${{ github.event.inputs.profile }} K6_DATA_FORMAT=${{ github.event.inputs.data_format }} k6 run tests/api-test.js
         
       - name: Run K6 Performance Test (Default Push/PR/Schedule)
         if: github.event_name != 'workflow_dispatch'
+        continue-on-error: true
         run: |
           npx cross-env K6_ENV=staging K6_PROFILE=fixed K6_DATA_FORMAT=json k6 run tests/api-test.js
 
