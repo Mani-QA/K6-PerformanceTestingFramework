@@ -1,0 +1,7 @@
+[
+  { "id": 1, "username": "perf_user_1", "role": "admin" },
+  { "id": 2, "username": "perf_user_2", "role": "user" },
+  { "id": 3, "username": "perf_user_3", "role": "editor" },
+  { "id": 4, "username": "perf_user_4", "role": "viewer" },
+  { "id": 5, "username": "perf_user_5", "role": "manager" }
+]

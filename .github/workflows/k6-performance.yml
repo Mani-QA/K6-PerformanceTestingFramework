@@ -1,0 +1,127 @@
+name: K6 Performance Testing Suite
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  schedule:
+    - cron: '0 0 * * *' # Run every day at midnight UTC (5:30 AM IST)
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: 'Load test execution profile'
+        required: true
+        default: 'fixed'
+        type: choice
+        options:
+          - fixed
+          - 'ramp-up'
+          - spike
+      environment:
+        description: 'Target environment configuration'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      data_format:
+        description: 'Test data format'
+        required: true
+        default: 'json'
+        type: choice
+        options:
+          - json
+          - csv
+
+permissions:
+  contents: write
+
+jobs:
+  performance-test:
+    name: Execute K6 Performance Test & Update History
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Checkout gh-pages (History Branch)
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: gh-pages-temp
+        continue-on-error: true
+
+      - name: Seed Previous History & Reports
+        run: |
+          mkdir -p history/reports
+          if [ -d "gh-pages-temp" ]; then
+            if [ -f "gh-pages-temp/runs.json" ]; then
+              cp gh-pages-temp/runs.json history/runs.json
+              echo "✓ Copied previous history database (runs.json)"
+            fi
+            if [ -d "gh-pages-temp/reports" ]; then
+              cp -r gh-pages-temp/reports/* history/reports/ || true
+              echo "✓ Seeded previously generated reports"
+            fi
+          fi
+
+      - name: Setup K6
+        uses: grafana/setup-k6-action@v1
+
+      - name: Run K6 Performance Test (Workflow Dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          npx cross-env K6_ENV=${{ github.event.inputs.environment }} K6_PROFILE=${{ github.event.inputs.profile }} K6_DATA_FORMAT=${{ github.event.inputs.data_format }} k6 run tests/api-test.js
+        
+      - name: Run K6 Performance Test (Default Push/PR/Schedule)
+        if: github.event_name != 'workflow_dispatch'
+        run: |
+          npx cross-env K6_ENV=staging K6_PROFILE=fixed K6_DATA_FORMAT=json k6 run tests/api-test.js
+
+      - name: Compile Historical Dashboard
+        if: always()
+        env:
+          K6_ENV: ${{ github.event.inputs.environment || 'staging' }}
+          K6_PROFILE: ${{ github.event.inputs.profile || 'fixed' }}
+        run: |
+          if [ -f reports/summary.json ]; then
+            node utils/build-dashboard.js
+          else
+            echo "⚠️ reports/summary.json not found, skipping history compilation."
+          fi
+
+      - name: Deploy Dashboard to GitHub Pages
+        uses: JamesIves/github-pages-deploy-action@v4
+        if: always() && hashFiles('history/index.html') != ''
+        with:
+          branch: gh-pages
+          folder: history
+          clean: false # Do not delete other historic runs stored on the branch
+
+      - name: Upload Telemetry Reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: k6-performance-reports
+          path: |
+            reports/summary.html
+            reports/summary.json
+          retention-days: 14

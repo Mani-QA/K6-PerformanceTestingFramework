@@ -1,0 +1,6 @@
+id,username,role
+1,perf_user_1,admin
+2,perf_user_2,user
+3,perf_user_3,editor
+4,perf_user_4,viewer
+5,perf_user_5,manager
