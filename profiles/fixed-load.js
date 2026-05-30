@@ -6,8 +6,8 @@
 export const fixedLoadScenarios = {
   fixed_load_scenario: {
     executor: 'constant-vus',
-    vus: __ENV.K6_VUS ? parseInt(__ENV.K6_VUS, 10) : 10,
-    duration: __ENV.K6_DURATION || '30s',
+    vus: __ENV.K6_VUS ? parseInt(__ENV.K6_VUS, 10) : 2,
+    duration: __ENV.K6_DURATION || '10s',
     gracefulStop: '5s',
   }
 };

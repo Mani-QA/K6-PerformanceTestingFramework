@@ -97,7 +97,10 @@ export default function () {
   // Perform checks
   let getCheck = check(getResponse, {
     'GET Status is 200': (r) => r.status === 200,
-    'GET Content-Type is JSON': (r) => r.headers && r.headers['Content-Type'] && r.headers['Content-Type'].includes('application/json'),
+    'GET Content-Type is JSON': (r) => {
+      const ct = r.headers['Content-Type'] || r.headers['content-type'] || '';
+      return ct.includes('application/json');
+    },
     'GET Payload validates user': (r) => {
       try {
         const json = JSON.parse(r.body);
@@ -160,8 +163,8 @@ export default function () {
     'POST Payload echoes body': (r) => {
       try {
         const json = JSON.parse(r.body);
-        const data = JSON.parse(json.data);
-        return data.userId === user.id && data.action === 'perf_transaction';
+        const echoed = json.json || JSON.parse(json.data);
+        return echoed.userId === user.id && echoed.action === 'perf_transaction';
       } catch (e) {
         return false;
       }

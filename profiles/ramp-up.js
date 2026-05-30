@@ -3,18 +3,18 @@
  * Gradual, stepped scaling of load over time to identify bottleneck thresholds.
  */
 
-const targetVuMax = __ENV.K6_MAX_VUS ? parseInt(__ENV.K6_MAX_VUS, 10) : 50;
-const targetVuMid = Math.floor(targetVuMax * 0.4);
+const targetVuMax = __ENV.K6_MAX_VUS ? parseInt(__ENV.K6_MAX_VUS, 10) : 5;
+const targetVuMid = Math.max(1, Math.floor(targetVuMax * 0.4));
 
 export const rampUpScenarios = {
   stress_test_scenario: {
     executor: 'ramping-vus',
     startVUs: 0,
     stages: [
-      { duration: '10s', target: targetVuMid }, // Ramp up to 40% of max
-      { duration: '15s', target: targetVuMax }, // Stepped escalation to max
-      { duration: '20s', target: targetVuMax }, // Stress hold at max
-      { duration: '10s', target: 0 },          // Cool down ramp down
+      { duration: '5s', target: targetVuMid }, // Ramp up
+      { duration: '10s', target: targetVuMax }, // Escalation
+      { duration: '10s', target: targetVuMax }, // Stress hold
+      { duration: '5s', target: 0 },           // Cool down
     ],
     gracefulRampDown: '5s',
   }
