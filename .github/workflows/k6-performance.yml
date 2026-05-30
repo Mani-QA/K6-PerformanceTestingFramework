@@ -105,7 +105,7 @@ jobs:
           K6_PROFILE: ${{ github.event.inputs.profile || 'fixed' }}
         run: |
           if [ -f reports/summary.json ]; then
-            node utils/build-dashboard.js
+            node utils/build-dashboard.cjs
           else
             echo "⚠️ reports/summary.json not found, skipping history compilation."
           fi
