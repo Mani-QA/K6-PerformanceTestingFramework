@@ -91,67 +91,125 @@ Add any parameterized variables required for your new requests (e.g., custom ite
   1,user1,admin,order_val_1
   ```
 
-#### Step C: Add the Transaction Logic & Assertions
-Open the main execution orchestrator [`tests/api-test.js`](file:///c:/Users/Maniv/Code/K6-PerformanceTestingFramework/tests/api-test.js) and insert your new transaction.
+#### Step C: Create a Dedicated Test Script
+Instead of modifying the boilerplate example [`tests/api-test.js`](file:///c:/Users/Maniv/Code/K6-PerformanceTestingFramework/tests/api-test.js) directly, it is best practice to create a dedicated test file inside the `tests/` directory (e.g., `tests/order-service-test.js`). 
 
-Below is an example of implementing a new POST request with a custom JSON payload and verification checks:
+You can copy the example file as a starting template and customize the transaction logic. Below is a code structure for implementing your new POST request with custom JSON payload and verification checks:
 
 ```javascript
-// ----------------------------------------------------
-// TRANSACTION 3: CREATE ORDER (CUSTOM PAYLOAD TEST)
-// ----------------------------------------------------
-const orderUrl = `${config.baseUrl}/post`; // Adjust endpoint path
-const orderPayload = JSON.stringify({
-  userId: user.id,
-  orderId: `order-${vuId}-${iterationId}`,
-  productType: user.role === 'admin' ? 'premium-bundle' : 'standard-item',
-  customData: user.customField || 'default_val',
-  timestamp: new Date().toISOString()
-});
+// tests/order-service-test.js
+import http from 'k6/http';
+import { check, sleep } from 'k6';
 
-const orderParams = {
-  timeout: parseInt(config.timeout, 10),
-  headers: {
-    'Content-Type': 'application/json',
-    'User-Agent': 'K6-Performance-Framework',
-    'X-Transaction-ID': `tx-${vuId}-${iterationId}`
-  }
+// Import modular environment loader and data utils
+import { loadConfig } from '../utils/env.js';
+import { loadTestData, getVuSequentialUser } from '../utils/data-loader.js';
+import { logger } from '../utils/logger.js';
+import { customHttpReqDuration, customSuccessRate, customTransactionCount } from '../utils/metrics.js';
+
+// Load load scenario profiles
+import { fixedLoadScenarios, fixedLoadThresholds } from '../profiles/fixed-load.js';
+import { rampUpScenarios, rampUpThresholds } from '../profiles/ramp-up.js';
+import { spikeScenarios, spikeThresholds } from '../profiles/spike.js';
+
+const config = loadConfig();
+const testData = loadTestData();
+
+const profiles = {
+  fixed: { scenarios: fixedLoadScenarios, thresholds: fixedLoadThresholds },
+  'ramp-up': { scenarios: rampUpScenarios, thresholds: rampUpThresholds },
+  spike: { scenarios: spikeScenarios, thresholds: spikeThresholds }
 };
 
-logger.debug('Starting Create Order transaction', { vu: vuId, iteration: iterationId });
+const selectedProfileName = __ENV.K6_PROFILE || 'fixed';
+const activeProfile = profiles[selectedProfileName] || profiles.fixed;
 
-startTime = Date.now();
-let orderResponse = http.post(orderUrl, orderPayload, orderParams);
-duration = Date.now() - startTime;
+export const options = {
+  scenarios: activeProfile.scenarios,
+  thresholds: activeProfile.thresholds
+};
 
-// 1. Record custom latency trend
-customHttpReqDuration.add(duration);
-
-// 2. Perform validations (Checks)
-let orderCheck = check(orderResponse, {
-  'Order status is 200': (r) => r.status === 200,
-  'Order creation echoed payload': (r) => {
-    try {
-      const json = JSON.parse(r.body);
-      const echoed = json.json || JSON.parse(json.data);
-      return echoed.userId === user.id && echoed.orderId !== undefined;
-    } catch (e) {
-      return false;
-    }
-  }
-});
-
-// 3. Track custom metrics & logs
-customSuccessRate.add(orderCheck);
-if (orderCheck) {
-  customTransactionCount.add(1);
-} else {
-  logger.error('Order transaction validation failed', {
-    vu: vuId,
-    status: orderResponse.status,
-    body: orderResponse.body ? orderResponse.body.substring(0, 200) : ''
+export default function () {
+  const vuId = __VU;
+  const iterationId = __ITER;
+  const user = getVuSequentialUser(testData, vuId);
+  
+  // ----------------------------------------------------
+  // TRANSACTION: CREATE ORDER (CUSTOM PAYLOAD TEST)
+  // ----------------------------------------------------
+  const orderUrl = `${config.baseUrl}/post`; // Adjust endpoint path
+  const orderPayload = JSON.stringify({
+    userId: user.id,
+    orderId: `order-${vuId}-${iterationId}`,
+    productType: user.role === 'admin' ? 'premium-bundle' : 'standard-item',
+    customData: user.customField || 'default_val',
+    timestamp: new Date().toISOString()
   });
+
+  const orderParams = {
+    timeout: parseInt(config.timeout, 10),
+    headers: {
+      'Content-Type': 'application/json',
+      'User-Agent': 'K6-Performance-Framework',
+      'X-Transaction-ID': `tx-${vuId}-${iterationId}`
+    }
+  };
+
+  logger.debug('Starting Create Order transaction', { vu: vuId, iteration: iterationId });
+
+  const startTime = Date.now();
+  let orderResponse = http.post(orderUrl, orderPayload, orderParams);
+  const duration = Date.now() - startTime;
+
+  // 1. Record custom latency trend
+  customHttpReqDuration.add(duration);
+
+  // 2. Perform validations (Checks)
+  let orderCheck = check(orderResponse, {
+    'Order status is 200': (r) => r.status === 200,
+    'Order creation echoed payload': (r) => {
+      try {
+        const json = JSON.parse(r.body);
+        const echoed = json.json || JSON.parse(json.data);
+        return echoed.userId === user.id && echoed.orderId !== undefined;
+      } catch (e) {
+        return false;
+      }
+    }
+  });
+
+  // 3. Track custom metrics & logs
+  customSuccessRate.add(orderCheck);
+  if (orderCheck) {
+    customTransactionCount.add(1);
+  } else {
+    logger.error('Order transaction validation failed', {
+      vu: vuId,
+      status: orderResponse.status,
+      body: orderResponse.body ? orderResponse.body.substring(0, 200) : ''
+    });
+  }
+
+  sleep(1);
 }
+
+export { handleSummary } from './api-test.js'; // Re-use common HTML/JSON summary generation
+```
+
+#### Step D: Update `package.json` to Run Your New Test
+Open [`package.json`](file:///c:/Users/Maniv/Code/K6-PerformanceTestingFramework/package.json) and configure a new script runner in the `"scripts"` object to execute your new test file under specific environments and profiles:
+
+```json
+"scripts": {
+  "test:fixed:staging": "cross-env K6_ENV=staging K6_PROFILE=fixed k6 run tests/api-test.js",
+  "test:order:fixed": "cross-env K6_ENV=staging K6_PROFILE=fixed k6 run tests/order-service-test.js",
+  "test:order:rampup": "cross-env K6_ENV=staging K6_PROFILE=ramp-up k6 run tests/order-service-test.js"
+}
+```
+
+Now you can run your customized performance test suite easily using standard npm commands:
+```bash
+npm run test:order:fixed
 ```
 
 ---
