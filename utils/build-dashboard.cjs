@@ -47,10 +47,18 @@ const checksSuccessRate = checksTotal > 0 ? (checksPass / checksTotal) * 100 : 1
 const passThresholds = (httpReqFailed < 0.05 && checksSuccessRate >= 95);
 const runStatus = passThresholds ? 'PASSED' : 'FAILED';
 
+// Load config to dynamically parse baseUrl
+let config;
+try {
+  config = JSON.parse(fs.readFileSync(path.join(__dirname, `../config/${envName}.json`), 'utf8'));
+} catch (e) {
+  config = { baseUrl: 'https://httpbin.org' };
+}
+
 // Define target APIs tested based on env
 const targetApis = [
-  `GET ${envName === 'production' ? 'https://httpbin.test.k6.io/get' : 'https://httpbin.test.k6.io/get'}`,
-  `POST ${envName === 'production' ? 'https://httpbin.test.k6.io/post' : 'https://httpbin.test.k6.io/post'}`
+  `GET ${config.baseUrl}/get`,
+  `POST ${config.baseUrl}/post`
 ];
 
 // Create run entry

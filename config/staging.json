@@ -1,6 +1,6 @@
 {
   "environment": "staging",
-  "baseUrl": "https://httpbin.test.k6.io",
+  "baseUrl": "https://httpbin.org",
   "timeout": "4000",
   "maxRedirects": 3
 }

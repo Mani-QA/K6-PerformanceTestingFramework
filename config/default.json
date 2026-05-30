@@ -1,6 +1,6 @@
 {
   "environment": "default",
-  "baseUrl": "https://httpbin.test.k6.io",
+  "baseUrl": "https://httpbin.org",
   "timeout": "5000",
   "maxRedirects": 4
 }
