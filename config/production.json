@@ -1,6 +1,6 @@
 {
   "environment": "production",
   "baseUrl": "https://httpbin.org",
-  "timeout": "3000",
+  "timeout": "10000",
   "maxRedirects": 2
 }

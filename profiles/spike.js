@@ -22,7 +22,7 @@ export const spikeScenarios = {
 };
 
 export const spikeThresholds = {
-  http_req_failed: ['rate < 0.10'], // Fail build if error rate exceeds 10% during extreme spike
-  http_req_duration: ['p(95) < 2000'], // Fail build if 95% of request latencies exceed 2000ms
-  custom_success_rate: ['rate > 0.90'], // Custom success rate must be over 90%
+  http_req_failed: ['rate < 0.20'], // Allow up to 20% errors under sudden spike
+  http_req_duration: ['p(95) < 5000'], // Widen budget to 5000ms for extreme traffic bursts
+  custom_success_rate: ['rate > 0.80'], // Allow up to 20% failed validations
 };

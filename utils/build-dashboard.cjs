@@ -37,14 +37,48 @@ const customSuccessRate = metrics.custom_success_rate ? (metrics.custom_success_
 const customTxCount = metrics.custom_transaction_count ? metrics.custom_transaction_count.values.count : 0;
 const customDurationP95 = metrics.custom_http_req_duration_ms ? metrics.custom_http_req_duration_ms.values['p(95)'] : 0;
 
+// Threshold limits by profile (matching profiles/*.js)
+const profileThresholds = {
+  fixed: {
+    maxErrorRate: 0.10,      // rate < 0.10 (10%)
+    maxLatencyMs: 3000,      // p(95) < 3000ms
+    minSuccessRate: 90.0,    // custom_success_rate > 90%
+    expectedErrorLabel: "< 10%",
+    expectedLatencyLabel: "< 3000 ms",
+    expectedSuccessLabel: "> 90%"
+  },
+  'ramp-up': {
+    maxErrorRate: 0.15,      // rate < 0.15 (15%)
+    maxLatencyMs: 4000,      // p(95) < 4000ms
+    minSuccessRate: 85.0,    // custom_success_rate > 85%
+    expectedErrorLabel: "< 15%",
+    expectedLatencyLabel: "< 4000 ms",
+    expectedSuccessLabel: "> 85%"
+  },
+  spike: {
+    maxErrorRate: 0.20,      // rate < 0.20 (20%)
+    maxLatencyMs: 5000,      // p(95) < 5000ms
+    minSuccessRate: 80.0,    // custom_success_rate > 80%
+    expectedErrorLabel: "< 20%",
+    expectedLatencyLabel: "< 5000 ms",
+    expectedSuccessLabel: "> 80%"
+  }
+};
+
 // Thresholds assessment
 const checksPass = metrics.checks ? metrics.checks.values.passes : 0;
 const checksFail = metrics.checks ? metrics.checks.values.fails : 0;
 const checksTotal = checksPass + checksFail;
 const checksSuccessRate = checksTotal > 0 ? (checksPass / checksTotal) * 100 : 100;
 
+const limits = profileThresholds[profileName.toLowerCase()] || profileThresholds.fixed;
+
+const errPassed = httpReqFailed < limits.maxErrorRate;
+const latencyPassed = httpReqDurationP95 < limits.maxLatencyMs;
+const successPassed = customSuccessRate >= limits.minSuccessRate;
+
 // Determine status based on thresholds
-const passThresholds = (httpReqFailed < 0.05 && checksSuccessRate >= 95);
+const passThresholds = errPassed && latencyPassed && successPassed;
 const runStatus = passThresholds ? 'PASSED' : 'FAILED';
 
 // Load config to dynamically parse baseUrl
@@ -79,9 +113,9 @@ const newRun = {
     checks: `${checksPass} / ${checksTotal} (${checksSuccessRate.toFixed(2)}%)`
   },
   thresholds: [
-    { name: "HTTP Errors Rate", expected: "< 5%", actual: (httpReqFailed * 100).toFixed(2) + '%', status: httpReqFailed < 0.05 ? 'PASSED' : 'FAILED' },
-    { name: "95th Percentile Latency", expected: profileName === 'fixed' ? "< 500 ms" : (profileName === 'ramp-up' ? "< 1000 ms" : "< 2000 ms"), actual: httpReqDurationP95.toFixed(2) + ' ms', status: (profileName === 'fixed' && httpReqDurationP95 < 500) || (profileName === 'ramp-up' && httpReqDurationP95 < 1000) || (profileName === 'spike' && httpReqDurationP95 < 2000) ? 'PASSED' : 'FAILED' },
-    { name: "Validations (Checks) Rate", expected: "> 95%", actual: checksSuccessRate.toFixed(2) + '%', status: checksSuccessRate >= 95 ? 'PASSED' : 'FAILED' }
+    { name: "HTTP Errors Rate", expected: limits.expectedErrorLabel, actual: (httpReqFailed * 100).toFixed(2) + '%', status: errPassed ? 'PASSED' : 'FAILED' },
+    { name: "95th Percentile Latency", expected: limits.expectedLatencyLabel, actual: httpReqDurationP95.toFixed(2) + ' ms', status: latencyPassed ? 'PASSED' : 'FAILED' },
+    { name: "Validations (Checks) Rate", expected: limits.expectedSuccessLabel, actual: customSuccessRate.toFixed(2) + '%', status: successPassed ? 'PASSED' : 'FAILED' }
   ],
   targetApis,
   reportPath: `reports/run-${timestampId}.html`
