@@ -1,5 +1,47 @@
 [
   {
+    "id": 1780165782263,
+    "timestamp": "2026-05-30T18:29:42.263Z",
+    "timestampIST": "May 30, 2026, 11:59:42 PM",
+    "environment": "STAGING",
+    "profile": "FIXED",
+    "status": "FAILED",
+    "metrics": {
+      "totalRequests": 369,
+      "failureRate": "33.33%",
+      "p95LatencyMs": "12.19 ms",
+      "customSuccessRate": "0.00%",
+      "customTxCount": 0,
+      "customP95LatencyMs": "16.00 ms",
+      "checks": "123 / 615 (20.00%)"
+    },
+    "thresholds": [
+      {
+        "name": "HTTP Errors Rate",
+        "expected": "< 5%",
+        "actual": "33.33%",
+        "status": "FAILED"
+      },
+      {
+        "name": "95th Percentile Latency",
+        "expected": "< 500 ms",
+        "actual": "12.19 ms",
+        "status": "PASSED"
+      },
+      {
+        "name": "Validations (Checks) Rate",
+        "expected": "> 95%",
+        "actual": "20.00%",
+        "status": "FAILED"
+      }
+    ],
+    "targetApis": [
+      "GET https://httpbin.test.k6.io/get",
+      "POST https://httpbin.test.k6.io/post"
+    ],
+    "reportPath": "reports/run-1780165782263.html"
+  },
+  {
     "id": 1780165536256,
     "timestamp": "2026-05-30T18:25:36.256Z",
     "timestampIST": "May 30, 2026, 11:55:36 PM",
