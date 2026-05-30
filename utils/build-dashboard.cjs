@@ -28,13 +28,12 @@ const istDateString = timestamp.toLocaleString('en-US', {
 });
 const timestampId = timestamp.getTime();
 
-// Parse metrics safely
 const metrics = summaryData.metrics || {};
 const httpReqsCount = metrics.http_reqs ? metrics.http_reqs.values.count : 0;
-const httpReqFailed = metrics.http_req_failed ? metrics.http_req_failed.values.value : 0; // rate of failure (0 to 1)
+const httpReqFailed = metrics.http_req_failed ? (metrics.http_req_failed.values.hasOwnProperty('rate') ? metrics.http_req_failed.values.rate : (metrics.http_req_failed.values.value || 0)) : 0; // rate of failure (0 to 1)
 const httpReqDurationP95 = metrics.http_req_duration ? metrics.http_req_duration.values['p(95)'] : 0;
 
-const customSuccessRate = metrics.custom_success_rate ? metrics.custom_success_rate.values.value * 100 : 100;
+const customSuccessRate = metrics.custom_success_rate ? (metrics.custom_success_rate.values.hasOwnProperty('rate') ? metrics.custom_success_rate.values.rate * 100 : (metrics.custom_success_rate.values.value || 0) * 100) : 100;
 const customTxCount = metrics.custom_transaction_count ? metrics.custom_transaction_count.values.count : 0;
 const customDurationP95 = metrics.custom_http_req_duration_ms ? metrics.custom_http_req_duration_ms.values['p(95)'] : 0;
 
