@@ -2,6 +2,10 @@
 
 A complete, production-ready, modular performance testing framework built on **Grafana K6** adhering strictly to official performance engineering design patterns and best practices.
 
+> [!TIP]
+> **Live Performance Run History & Telemetry Dashboard**: Check out the continuous test results, IST execution histories, and expected-vs-actual validation gates at:
+> **[https://mani-qa.github.io/K6-PerformanceTestingFramework/](https://mani-qa.github.io/K6-PerformanceTestingFramework/)**
+
 ---
 
 ## Functional Features
@@ -20,7 +24,7 @@ A complete, production-ready, modular performance testing framework built on **G
 
 ---
 
-## 🚀 Beginner-Friendly Customization Guide
+## ⚙️ Configuration Guide
 
 This framework is built to be extremely flexible. You can customize test scenarios, input datasets, and load intensities **without rewriting any core test logic**.
 
@@ -62,6 +66,93 @@ You can customize the credentials, API paths, or dynamic fields fed to your test
   1,your_custom_user,admin
   ```
 * *Note: The data-loader automatically loops through this array sequentially, ensuring VUs receive separate credentials and do not step on each other.*
+
+### 3. Adding New Tests (New Target URLs & Payloads)
+
+To add tests targeting a new API endpoint or include custom JSON/form payloads, follow this simple workflow:
+
+#### Step A: Update Environment Targets or Host Configurations (Optional)
+If your new endpoints reside on a different host or use specific headers, declare them in the environment config files under `config/`:
+* [`config/default.json`](file:///c:/Users/Maniv/Code/K6-PerformanceTestingFramework/config/default.json)
+* [`config/staging.json`](file:///c:/Users/Maniv/Code/K6-PerformanceTestingFramework/config/staging.json)
+* [`config/production.json`](file:///c:/Users/Maniv/Code/K6-PerformanceTestingFramework/config/production.json)
+
+#### Step B: Define Parameterized User Data
+Add any parameterized variables required for your new requests (e.g., custom item IDs, account tokens, product categories) to your test dataset:
+* **JSON format**: Append key-value pairs in [`data/users.json`](file:///c:/Users/Maniv/Code/K6-PerformanceTestingFramework/data/users.json):
+  ```json
+  [
+    { "id": 1, "username": "user1", "role": "admin", "customField": "order_val_1" }
+  ]
+  ```
+* **CSV format**: Add a new column to the header and rows in [`data/users.csv`](file:///c:/Users/Maniv/Code/K6-PerformanceTestingFramework/data/users.csv):
+  ```csv
+  id,username,role,customField
+  1,user1,admin,order_val_1
+  ```
+
+#### Step C: Add the Transaction Logic & Assertions
+Open the main execution orchestrator [`tests/api-test.js`](file:///c:/Users/Maniv/Code/K6-PerformanceTestingFramework/tests/api-test.js) and insert your new transaction.
+
+Below is an example of implementing a new POST request with a custom JSON payload and verification checks:
+
+```javascript
+// ----------------------------------------------------
+// TRANSACTION 3: CREATE ORDER (CUSTOM PAYLOAD TEST)
+// ----------------------------------------------------
+const orderUrl = `${config.baseUrl}/post`; // Adjust endpoint path
+const orderPayload = JSON.stringify({
+  userId: user.id,
+  orderId: `order-${vuId}-${iterationId}`,
+  productType: user.role === 'admin' ? 'premium-bundle' : 'standard-item',
+  customData: user.customField || 'default_val',
+  timestamp: new Date().toISOString()
+});
+
+const orderParams = {
+  timeout: parseInt(config.timeout, 10),
+  headers: {
+    'Content-Type': 'application/json',
+    'User-Agent': 'K6-Performance-Framework',
+    'X-Transaction-ID': `tx-${vuId}-${iterationId}`
+  }
+};
+
+logger.debug('Starting Create Order transaction', { vu: vuId, iteration: iterationId });
+
+startTime = Date.now();
+let orderResponse = http.post(orderUrl, orderPayload, orderParams);
+duration = Date.now() - startTime;
+
+// 1. Record custom latency trend
+customHttpReqDuration.add(duration);
+
+// 2. Perform validations (Checks)
+let orderCheck = check(orderResponse, {
+  'Order status is 200': (r) => r.status === 200,
+  'Order creation echoed payload': (r) => {
+    try {
+      const json = JSON.parse(r.body);
+      const echoed = json.json || JSON.parse(json.data);
+      return echoed.userId === user.id && echoed.orderId !== undefined;
+    } catch (e) {
+      return false;
+    }
+  }
+});
+
+// 3. Track custom metrics & logs
+customSuccessRate.add(orderCheck);
+if (orderCheck) {
+  customTransactionCount.add(1);
+} else {
+  logger.error('Order transaction validation failed', {
+    vu: vuId,
+    status: orderResponse.status,
+    body: orderResponse.body ? orderResponse.body.substring(0, 200) : ''
+  });
+}
+```
 
 ---
 
