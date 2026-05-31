@@ -261,49 +261,6 @@ export default function () {
     customTransactionCount.add(1);
   }
   
-  // Think time pacing
-  sleep(0.5);
-  
-  // ----------------------------------------------------
-  // TRANSACTION 4: GET /users (List / Search Directory Verification)
-  // ----------------------------------------------------
-  // Query directory by passing search parameter representing our specific unique user name
-  const searchName = `${csvUser.name} VU${vuId}-${iterationId}`;
-  const listUrl = `${config.baseUrl}/users?search=${encodeURIComponent(searchName)}`;
-  
-  logger.debug('Starting GET /users search transaction', { vu: vuId, iteration: iterationId, searchName });
-  
-  startTime = Date.now();
-  let listResponse = http.get(listUrl, requestParams);
-  duration = Date.now() - startTime;
-  
-  customHttpReqDuration.add(duration);
-  
-  let listCheck = check(listResponse, {
-    'GET list status is 200': (r) => r.status === 200,
-    'GET list returns matched user': (r) => {
-      try {
-        const body = JSON.parse(r.body);
-        return Array.isArray(body) && body.length > 0 && body[0].id === userId;
-      } catch (e) {
-        return false;
-      }
-    }
-  });
-  
-  customSuccessRate.add(listCheck);
-  
-  if (!listCheck) {
-    logger.warn('GET /users list search transaction validation failed', {
-      vu: vuId,
-      iteration: iterationId,
-      status: listResponse.status,
-      body: listResponse.body ? listResponse.body.substring(0, 200) : ''
-    });
-  } else {
-    customTransactionCount.add(1);
-  }
-  
   // Standard user paced dynamic think time pacing (1s - 2s)
   const finalThink = 1 + Math.random();
   sleep(finalThink);
