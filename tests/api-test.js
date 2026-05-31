@@ -1,7 +1,11 @@
 /**
- * Main K6 Performance Test script.
- * Decouples logic from environments and load profiles, uses advanced multi-scenarios executors,
- * tracks custom metrics, and logs transactions cleanly in JSON.
+ * NovaUser D1 API K6 Performance Test script (Wrapper/Alias for api-test.js).
+ * 
+ * Tests all 3 endpoints listed in the API docs (POST /users, GET /users/:id, PATCH /users/:id).
+ * 
+ * Uses realistic pre-provided CSV mock users from `data/test-users.csv` for request payloads,
+ * sanitizes job roles into supported privileges (Admin, Editor, Viewer), tracks custom metrics,
+ * and outputs structured JSON logs.
  */
 
 import http from 'k6/http';
@@ -16,7 +20,7 @@ import { spikeScenarios, spikeThresholds } from '../profiles/spike.js';
 
 // Load our utilities
 import { loadConfig } from '../utils/env.js';
-import { loadTestData, getVuSequentialUser } from '../utils/data-loader.js';
+import { loadTestUsersCSV, getVuSequentialUser } from '../utils/data-loader.js';
 import { logger } from '../utils/logger.js';
 import { 
   customHttpReqDuration, 
@@ -27,7 +31,7 @@ import {
 
 // Init context: static loader calls
 const config = loadConfig();
-const testData = loadTestData();
+const testUsers = loadTestUsersCSV();
 
 // Map profiles to their scenarios and thresholds
 const profiles = {
@@ -55,116 +59,86 @@ export const options = {
   thresholds: activeProfile.thresholds
 };
 
-logger.info('Initialized K6 Performance Test Framework', {
+logger.info('Initialized NovaUser K6 Performance Test Script', {
   environment: config.environment,
   baseUrl: config.baseUrl,
   profile: selectedProfileName,
-  totalUsersLoaded: testData.length
+  totalUsersLoaded: testUsers.length
 });
+
+/**
+ * Maps raw CSV job roles (e.g. "Product Designer") to valid API roles (Admin, Editor, Viewer).
+ * Done deterministically to maintain user-level data balance.
+ */
+function getValidApiRole(csvRole) {
+  const cleanRole = (csvRole || '').trim().toLowerCase();
+  // Provide deterministic mapping based on string value
+  const hash = cleanRole.length % 3;
+  if (hash === 0) return 'Admin';
+  if (hash === 1) return 'Editor';
+  return 'Viewer';
+}
+
+/**
+ * Helper to select a new role different from the current one to test PATCH transitions.
+ */
+function getAlternativeApiRole(currentRole) {
+  if (currentRole === 'Admin') return 'Editor';
+  if (currentRole === 'Editor') return 'Viewer';
+  return 'Admin';
+}
 
 // VU execution context
 export default function () {
   const vuId = __VU;
   const iterationId = __ITER;
   
-  // Load dynamic parameterized user for this specific VU iteration sequentially
-  const user = getVuSequentialUser(testData, vuId);
-  
   // Track active VUs dynamically using our custom Gauge metric
   customActiveVus.add(vuId);
   
-  // ----------------------------------------------------
-  // TRANSACTION 1: GET REQUEST
-  // ----------------------------------------------------
-  const getUrl = `${config.baseUrl}/get?userId=${user.id}&username=${user.username}&role=${user.role}`;
-  const params = {
-    timeout: parseInt(config.timeout, 10),
-    headers: {
-      'User-Agent': 'K6-Performance-Framework',
-      'Accept': 'application/json'
-    }
+  // Retrieve sequential mock user from the parsed test-users CSV
+  const csvUser = getVuSequentialUser(testUsers, vuId);
+  
+  // Map job title role to API supported roles
+  const initialRole = getValidApiRole(csvUser.role);
+  
+  const headers = {
+    'Content-Type': 'application/json',
+    'User-Agent': 'K6-NovaUser-Performance-Framework',
+    'Accept': 'application/json'
   };
   
-  logger.debug('Starting GET transaction', { vu: vuId, iteration: iterationId, url: getUrl });
+  const requestParams = {
+    timeout: parseInt(config.timeout, 10),
+    headers: headers
+  };
+  
+  // ----------------------------------------------------
+  // TRANSACTION 1: POST /users (Create User)
+  // ----------------------------------------------------
+  const postUrl = `${config.baseUrl}/users`;
+  
+  // Since multiple VUs might loop, we can append a unique tag to email/name to guarantee unique persistence check
+  const postPayload = JSON.stringify({
+    name: `${csvUser.name} VU${vuId}-${iterationId}`,
+    email: `vu${vuId}_iter${iterationId}_${csvUser.email}`,
+    role: initialRole
+  });
+  
+  logger.debug('Starting POST /users transaction', { vu: vuId, iteration: iterationId, email: csvUser.email });
   
   let startTime = Date.now();
-  let getResponse = http.get(getUrl, params);
+  let postResponse = http.post(postUrl, postPayload, requestParams);
   let duration = Date.now() - startTime;
-  
-  // Record custom trend metric (HTTP request latency)
-  customHttpReqDuration.add(duration);
-  
-  // Perform checks
-  let getCheck = check(getResponse, {
-    'GET Status is 200': (r) => r.status === 200,
-    'GET Content-Type is JSON': (r) => {
-      const ct = r.headers['Content-Type'] || r.headers['content-type'] || '';
-      return ct.includes('application/json');
-    },
-    'GET Payload validates user': (r) => {
-      try {
-        const json = JSON.parse(r.body);
-        return json.args.username === user.username;
-      } catch (e) {
-        return false;
-      }
-    }
-  });
-  
-  // Track custom Success Rate (adding true/false boolean)
-  customSuccessRate.add(getCheck);
-  
-  if (!getCheck) {
-    logger.warn('GET transaction validation failed', {
-      vu: vuId,
-      iteration: iterationId,
-      status: getResponse.status,
-      error: getResponse.error,
-      body: getResponse.body ? getResponse.body.substring(0, 200) : ''
-    });
-  } else {
-    // Increment success counter
-    customTransactionCount.add(1);
-  }
-  
-  // Simulating typical user pacing think time
-  sleep(1);
-  
-  // ----------------------------------------------------
-  // TRANSACTION 2: POST REQUEST
-  // ----------------------------------------------------
-  const postUrl = `${config.baseUrl}/post`;
-  const postPayload = JSON.stringify({
-    userId: user.id,
-    action: 'perf_transaction',
-    timestamp: new Date().toISOString(),
-    client: 'k6-perf-agent'
-  });
-  
-  const postParams = {
-    timeout: parseInt(config.timeout, 10),
-    headers: {
-      'Content-Type': 'application/json',
-      'User-Agent': 'K6-Performance-Framework',
-      'Accept': 'application/json'
-    }
-  };
-  
-  logger.debug('Starting POST transaction', { vu: vuId, iteration: iterationId, url: postUrl });
-  
-  startTime = Date.now();
-  let postResponse = http.post(postUrl, postPayload, postParams);
-  duration = Date.now() - startTime;
   
   customHttpReqDuration.add(duration);
   
   let postCheck = check(postResponse, {
-    'POST Status is 200': (r) => r.status === 200,
-    'POST Payload echoes body': (r) => {
+    'POST status is 201': (r) => r.status === 201,
+    'POST response has secure UUID id': (r) => {
       try {
-        const json = JSON.parse(r.body);
-        const echoed = json.json || JSON.parse(json.data);
-        return echoed.userId === user.id && echoed.action === 'perf_transaction';
+        const body = JSON.parse(r.body);
+        return body && typeof body.id === 'string' && body.id.length === 36;
       } catch (e) {
         return false;
       }
@@ -174,25 +148,126 @@ export default function () {
   customSuccessRate.add(postCheck);
   
   if (!postCheck) {
-    logger.error('POST transaction validation failed', {
+    logger.error('POST /users transaction validation failed', {
       vu: vuId,
       iteration: iterationId,
       status: postResponse.status,
       error: postResponse.error,
       body: postResponse.body ? postResponse.body.substring(0, 200) : ''
     });
+    // Skip downstream operations if the creation fails to prevent waterfall error cascades
+    sleep(1);
+    return;
+  }
+  
+  customTransactionCount.add(1);
+  const userId = JSON.parse(postResponse.body).id;
+  
+  // Think time pacing
+  sleep(0.5);
+  
+  // ----------------------------------------------------
+  // TRANSACTION 2: GET /users/:id (Query User Details)
+  // ----------------------------------------------------
+  const getUrl = `${config.baseUrl}/users/${userId}`;
+  
+  logger.debug('Starting GET /users/:id transaction', { vu: vuId, iteration: iterationId, userId });
+  
+  startTime = Date.now();
+  let getResponse = http.get(getUrl, requestParams);
+  duration = Date.now() - startTime;
+  
+  customHttpReqDuration.add(duration);
+  
+  let getCheck = check(getResponse, {
+    'GET details status is 200': (r) => r.status === 200,
+    'GET details matches email': (r) => {
+      try {
+        const body = JSON.parse(r.body);
+        return body && body.email === `vu${vuId}_iter${iterationId}_${csvUser.email}`;
+      } catch (e) {
+        return false;
+      }
+    },
+    'GET details matches role': (r) => {
+      try {
+        const body = JSON.parse(r.body);
+        return body && body.role === initialRole;
+      } catch (e) {
+        return false;
+      }
+    }
+  });
+  
+  customSuccessRate.add(getCheck);
+  
+  if (!getCheck) {
+    logger.warn('GET /users/:id transaction validation failed', {
+      vu: vuId,
+      iteration: iterationId,
+      status: getResponse.status,
+      error: getResponse.error,
+      body: getResponse.body ? getResponse.body.substring(0, 200) : ''
+    });
   } else {
     customTransactionCount.add(1);
   }
   
-  // Dynamic random think time between 1 and 2 seconds
-  const thinkTime = 1 + Math.random();
-  sleep(thinkTime);
+  // Think time pacing
+  sleep(0.5);
+  
+  // ----------------------------------------------------
+  // TRANSACTION 3: PATCH /users/:id (Modify User Privilege)
+  // ----------------------------------------------------
+  const patchUrl = `${config.baseUrl}/users/${userId}`;
+  const updatedRole = getAlternativeApiRole(initialRole);
+  
+  const patchPayload = JSON.stringify({
+    role: updatedRole
+  });
+  
+  logger.debug('Starting PATCH /users/:id transaction', { vu: vuId, iteration: iterationId, userId, newRole: updatedRole });
+  
+  startTime = Date.now();
+  let patchResponse = http.patch(patchUrl, patchPayload, requestParams);
+  duration = Date.now() - startTime;
+  
+  customHttpReqDuration.add(duration);
+  
+  let patchCheck = check(patchResponse, {
+    'PATCH update status is 200': (r) => r.status === 200,
+    'PATCH returns success: true': (r) => {
+      try {
+        const body = JSON.parse(r.body);
+        return body && body.success === true;
+      } catch (e) {
+        return false;
+      }
+    }
+  });
+  
+  customSuccessRate.add(patchCheck);
+  
+  if (!patchCheck) {
+    logger.error('PATCH /users/:id transaction validation failed', {
+      vu: vuId,
+      iteration: iterationId,
+      status: patchResponse.status,
+      error: patchResponse.error,
+      body: patchResponse.body ? patchResponse.body.substring(0, 200) : ''
+    });
+  } else {
+    customTransactionCount.add(1);
+  }
+  
+  // Standard user paced dynamic think time pacing (1s - 2s)
+  const finalThink = 1 + Math.random();
+  sleep(finalThink);
 }
 
 // Summary hook called once execution completes
 export function handleSummary(data) {
-  logger.info('Execution completed. Rending summary HTML and JSON reports...');
+  logger.info('Execution completed. Compiling NovaUser performance run summaries...');
   
   return {
     'reports/summary.html': htmlReport(data),
