@@ -37,45 +37,64 @@ const customSuccessRate = metrics.custom_success_rate ? (metrics.custom_success_
 const customTxCount = metrics.custom_transaction_count ? metrics.custom_transaction_count.values.count : 0;
 const customDurationP95 = metrics.custom_http_req_duration_ms ? metrics.custom_http_req_duration_ms.values['p(95)'] : 0;
 
-// Threshold limits by profile (matching profiles/*.js)
-const profileThresholds = {
-  fixed: {
-    maxErrorRate: 0.10,      // rate < 0.10 (10%)
-    maxLatencyMs: 3000,      // p(95) < 3000ms
-    minSuccessRate: 90.0,    // custom_success_rate > 90%
-    expectedErrorLabel: "< 10%",
-    expectedLatencyLabel: "< 3000 ms",
-    expectedSuccessLabel: "> 90%"
-  },
-  'ramp-up': {
-    maxErrorRate: 0.15,      // rate < 0.15 (15%)
-    maxLatencyMs: 4000,      // p(95) < 4000ms
-    minSuccessRate: 85.0,    // custom_success_rate > 85%
-    expectedErrorLabel: "< 15%",
-    expectedLatencyLabel: "< 4000 ms",
-    expectedSuccessLabel: "> 85%"
-  },
-  spike: {
-    maxErrorRate: 0.20,      // rate < 0.20 (20%)
-    maxLatencyMs: 5000,      // p(95) < 5000ms
-    minSuccessRate: 80.0,    // custom_success_rate > 80%
-    expectedErrorLabel: "< 20%",
-    expectedLatencyLabel: "< 5000 ms",
-    expectedSuccessLabel: "> 80%"
-  }
-};
-
 // Thresholds assessment
 const checksPass = metrics.checks ? metrics.checks.values.passes : 0;
 const checksFail = metrics.checks ? metrics.checks.values.fails : 0;
 const checksTotal = checksPass + checksFail;
 const checksSuccessRate = checksTotal > 0 ? (checksPass / checksTotal) * 100 : 100;
 
-const limits = profileThresholds[profileName.toLowerCase()] || profileThresholds.fixed;
+// Dynamic Thresholds Parser: extract directly from K6 metrics in summary.json
+const errThresholdStr = Object.keys(metrics.http_req_failed?.thresholds || {})[0] || '';
+let expectedErrorLabel = "< 5%"; // default fallback
+if (errThresholdStr) {
+  const match = errThresholdStr.match(/(?:rate)\s*([<>=]+)\s*([\d.]+)/);
+  if (match) {
+    const op = match[1];
+    const val = parseFloat(match[2]);
+    expectedErrorLabel = `${op} ${(val * 100).toFixed(0)}%`;
+  } else {
+    expectedErrorLabel = errThresholdStr;
+  }
+}
 
-const errPassed = httpReqFailed < limits.maxErrorRate;
-const latencyPassed = httpReqDurationP95 < limits.maxLatencyMs;
-const successPassed = customSuccessRate >= limits.minSuccessRate;
+const latThresholdStr = Object.keys(metrics.http_req_duration?.thresholds || {})[0] || '';
+let expectedLatencyLabel = "< 2000 ms"; // default fallback
+if (latThresholdStr) {
+  const match = latThresholdStr.match(/(?:p\(\d+\)|avg|med)\s*([<>=]+)\s*([\d.]+)/);
+  if (match) {
+    const op = match[1];
+    const val = parseFloat(match[2]);
+    expectedLatencyLabel = `${op} ${val} ms`;
+  } else {
+    expectedLatencyLabel = latThresholdStr;
+  }
+}
+
+const succThresholdStr = Object.keys(metrics.custom_success_rate?.thresholds || {})[0] || '';
+let expectedSuccessLabel = "> 95%"; // default fallback
+if (succThresholdStr) {
+  const match = succThresholdStr.match(/(?:rate)\s*([<>=]+)\s*([\d.]+)/);
+  if (match) {
+    const op = match[1];
+    const val = parseFloat(match[2]);
+    expectedSuccessLabel = `${op} ${(val * 100).toFixed(0)}%`;
+  } else {
+    expectedSuccessLabel = succThresholdStr;
+  }
+}
+
+// Assess pass/fail dynamically using K6's evaluated status in summary.json
+const errPassed = metrics.http_req_failed?.thresholds 
+  ? Object.values(metrics.http_req_failed.thresholds)[0]?.ok 
+  : (httpReqFailed < 0.05);
+
+const latencyPassed = metrics.http_req_duration?.thresholds 
+  ? Object.values(metrics.http_req_duration.thresholds)[0]?.ok 
+  : (httpReqDurationP95 < 2000);
+
+const successPassed = metrics.custom_success_rate?.thresholds 
+  ? Object.values(metrics.custom_success_rate.thresholds)[0]?.ok 
+  : (customSuccessRate >= 95.0);
 
 // Determine status based on thresholds
 const passThresholds = errPassed && latencyPassed && successPassed;
@@ -144,9 +163,9 @@ const newRun = {
     checks: `${checksPass} / ${checksTotal} (${checksSuccessRate.toFixed(2)}%)`
   },
   thresholds: [
-    { name: "HTTP Errors Rate", expected: limits.expectedErrorLabel, actual: (httpReqFailed * 100).toFixed(2) + '%', status: errPassed ? 'PASSED' : 'FAILED' },
-    { name: "95th Percentile Latency", expected: limits.expectedLatencyLabel, actual: httpReqDurationP95.toFixed(2) + ' ms', status: latencyPassed ? 'PASSED' : 'FAILED' },
-    { name: "Validations (Checks) Rate", expected: limits.expectedSuccessLabel, actual: customSuccessRate.toFixed(2) + '%', status: successPassed ? 'PASSED' : 'FAILED' }
+    { name: "HTTP Errors Rate", expected: expectedErrorLabel, actual: (httpReqFailed * 100).toFixed(2) + '%', status: errPassed ? 'PASSED' : 'FAILED' },
+    { name: "95th Percentile Latency", expected: expectedLatencyLabel, actual: httpReqDurationP95.toFixed(2) + ' ms', status: latencyPassed ? 'PASSED' : 'FAILED' },
+    { name: "Validations (Checks) Rate", expected: expectedSuccessLabel, actual: customSuccessRate.toFixed(2) + '%', status: successPassed ? 'PASSED' : 'FAILED' }
   ],
   targetApis,
   reportPath: `reports/run-${timestampId}.html`
