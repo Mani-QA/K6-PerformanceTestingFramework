@@ -269,6 +269,16 @@ export default function () {
 export function handleSummary(data) {
   logger.info('Execution completed. Compiling NovaUser performance run summaries...');
   
+  // Inject metadata with tested target APIs for the history dashboard compiler
+  data.metadata = {
+    testScript: 'tests/api-test.js',
+    targetApis: [
+      'POST /users',
+      'GET /users/:id',
+      'PATCH /users/:id'
+    ]
+  };
+  
   return {
     'reports/summary.html': htmlReport(data),
     'reports/summary.json': JSON.stringify(data, null, 2),

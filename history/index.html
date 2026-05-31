@@ -1,232 +1,4 @@
-const fs = require('fs');
-const path = require('path');
-
-// Target paths
-const summaryPath = path.join(__dirname, '../reports/summary.json');
-const historyDir = path.join(__dirname, '../history');
-const runsJsonPath = path.join(historyDir, 'runs.json');
-const indexPath = path.join(historyDir, 'index.html');
-const reportsDir = path.join(historyDir, 'reports');
-
-if (!fs.existsSync(summaryPath)) {
-  console.error("Error: summary.json not found!");
-  process.exit(1);
-}
-
-const summaryData = JSON.parse(fs.readFileSync(summaryPath, 'utf8'));
-
-// Parse environment and profile from K6 options/env
-const envName = process.env.K6_ENV || 'staging';
-const profileName = process.env.K6_PROFILE || 'fixed';
-const timestamp = new Date();
-
-// Convert to IST string
-const istDateString = timestamp.toLocaleString('en-US', { 
-  timeZone: 'Asia/Kolkata',
-  dateStyle: 'medium',
-  timeStyle: 'medium'
-});
-const timestampId = timestamp.getTime();
-
-const metrics = summaryData.metrics || {};
-const httpReqsCount = metrics.http_reqs ? metrics.http_reqs.values.count : 0;
-const httpReqFailed = metrics.http_req_failed ? (metrics.http_req_failed.values.hasOwnProperty('rate') ? metrics.http_req_failed.values.rate : (metrics.http_req_failed.values.value || 0)) : 0; // rate of failure (0 to 1)
-const httpReqDurationP95 = metrics.http_req_duration ? metrics.http_req_duration.values['p(95)'] : 0;
-
-const customSuccessRate = metrics.custom_success_rate ? (metrics.custom_success_rate.values.hasOwnProperty('rate') ? metrics.custom_success_rate.values.rate * 100 : (metrics.custom_success_rate.values.value || 0) * 100) : 100;
-const customTxCount = metrics.custom_transaction_count ? metrics.custom_transaction_count.values.count : 0;
-const customDurationP95 = metrics.custom_http_req_duration_ms ? metrics.custom_http_req_duration_ms.values['p(95)'] : 0;
-
-// Threshold limits by profile (matching profiles/*.js)
-const profileThresholds = {
-  fixed: {
-    maxErrorRate: 0.10,      // rate < 0.10 (10%)
-    maxLatencyMs: 3000,      // p(95) < 3000ms
-    minSuccessRate: 90.0,    // custom_success_rate > 90%
-    expectedErrorLabel: "< 10%",
-    expectedLatencyLabel: "< 3000 ms",
-    expectedSuccessLabel: "> 90%"
-  },
-  'ramp-up': {
-    maxErrorRate: 0.15,      // rate < 0.15 (15%)
-    maxLatencyMs: 4000,      // p(95) < 4000ms
-    minSuccessRate: 85.0,    // custom_success_rate > 85%
-    expectedErrorLabel: "< 15%",
-    expectedLatencyLabel: "< 4000 ms",
-    expectedSuccessLabel: "> 85%"
-  },
-  spike: {
-    maxErrorRate: 0.20,      // rate < 0.20 (20%)
-    maxLatencyMs: 5000,      // p(95) < 5000ms
-    minSuccessRate: 80.0,    // custom_success_rate > 80%
-    expectedErrorLabel: "< 20%",
-    expectedLatencyLabel: "< 5000 ms",
-    expectedSuccessLabel: "> 80%"
-  }
-};
-
-// Thresholds assessment
-const checksPass = metrics.checks ? metrics.checks.values.passes : 0;
-const checksFail = metrics.checks ? metrics.checks.values.fails : 0;
-const checksTotal = checksPass + checksFail;
-const checksSuccessRate = checksTotal > 0 ? (checksPass / checksTotal) * 100 : 100;
-
-const limits = profileThresholds[profileName.toLowerCase()] || profileThresholds.fixed;
-
-const errPassed = httpReqFailed < limits.maxErrorRate;
-const latencyPassed = httpReqDurationP95 < limits.maxLatencyMs;
-const successPassed = customSuccessRate >= limits.minSuccessRate;
-
-// Determine status based on thresholds
-const passThresholds = errPassed && latencyPassed && successPassed;
-const runStatus = passThresholds ? 'PASSED' : 'FAILED';
-
-// Load config to dynamically parse baseUrl
-let config;
-try {
-  config = JSON.parse(fs.readFileSync(path.join(__dirname, `../config/${envName}.json`), 'utf8'));
-} catch (e) {
-  config = { baseUrl: 'https://httpbin.org' };
-}
-
-// Define target APIs tested based on env and dynamic test run metadata
-let targetApis = [];
-if (summaryData.metadata && Array.isArray(summaryData.metadata.targetApis)) {
-  targetApis = summaryData.metadata.targetApis.map(api => {
-    const parts = api.trim().split(/\s+/);
-    const method = parts[0] || 'GET';
-    const path = parts[1] || '';
-    return `${method} ${config.baseUrl}${path.startsWith('/') ? path : '/' + path}`;
-  });
-} else {
-  // Dynamic fallback: parse checks in summary.json to detect HTTP methods and match them to users endpoints
-  const checks = (summaryData.root_group && summaryData.root_group.checks) || [];
-  const detectedMethods = new Set();
-  checks.forEach(check => {
-    const match = check.name.match(/^(GET|POST|PATCH|PUT|DELETE)/i);
-    if (match) {
-      detectedMethods.add(match[1].toUpperCase());
-    }
-  });
-
-  if (detectedMethods.size > 0) {
-    detectedMethods.forEach(method => {
-      if (method === 'POST') targetApis.push(`POST ${config.baseUrl}/users`);
-      else if (method === 'GET') targetApis.push(`GET ${config.baseUrl}/users/:id`);
-      else if (method === 'PATCH') targetApis.push(`PATCH ${config.baseUrl}/users/:id`);
-    });
-  } else {
-    // Default fallback
-    targetApis = [
-      `POST ${config.baseUrl}/users`,
-      `GET ${config.baseUrl}/users/:id`,
-      `PATCH ${config.baseUrl}/users/:id`
-    ];
-  }
-}
-
-
-// Create run entry
-const newRun = {
-  id: timestampId,
-  timestamp: timestamp.toISOString(),
-  timestampIST: istDateString,
-  environment: envName.toUpperCase(),
-  profile: profileName.toUpperCase(),
-  status: runStatus,
-  metrics: {
-    totalRequests: httpReqsCount,
-    failureRate: (httpReqFailed * 100).toFixed(2) + '%',
-    p95LatencyMs: httpReqDurationP95.toFixed(2) + ' ms',
-    customSuccessRate: customSuccessRate.toFixed(2) + '%',
-    customTxCount: customTxCount,
-    customP95LatencyMs: customDurationP95 ? customDurationP95.toFixed(2) + ' ms' : 'N/A',
-    checks: `${checksPass} / ${checksTotal} (${checksSuccessRate.toFixed(2)}%)`
-  },
-  thresholds: [
-    { name: "HTTP Errors Rate", expected: limits.expectedErrorLabel, actual: (httpReqFailed * 100).toFixed(2) + '%', status: errPassed ? 'PASSED' : 'FAILED' },
-    { name: "95th Percentile Latency", expected: limits.expectedLatencyLabel, actual: httpReqDurationP95.toFixed(2) + ' ms', status: latencyPassed ? 'PASSED' : 'FAILED' },
-    { name: "Validations (Checks) Rate", expected: limits.expectedSuccessLabel, actual: customSuccessRate.toFixed(2) + '%', status: successPassed ? 'PASSED' : 'FAILED' }
-  ],
-  targetApis,
-  reportPath: `reports/run-${timestampId}.html`
-};
-
-// Ensure directories exist
-if (!fs.existsSync(historyDir)) {
-  fs.mkdirSync(historyDir);
-}
-if (!fs.existsSync(reportsDir)) {
-  fs.mkdirSync(reportsDir);
-}
-
-// Copy the latest HTML report
-const sourceHtml = path.join(__dirname, '../reports/summary.html');
-const destHtml = path.join(reportsDir, `run-${timestampId}.html`);
-if (fs.existsSync(sourceHtml)) {
-  fs.copyFileSync(sourceHtml, destHtml);
-} else {
-  fs.writeFileSync(destHtml, `<h1>Report Fallback for Run ${timestampId}</h1>`);
-}
-
-// Load existing history database
-let history = [];
-if (fs.existsSync(runsJsonPath)) {
-  try {
-    history = JSON.parse(fs.readFileSync(runsJsonPath, 'utf8'));
-    // Migrate/update historical runs to correct target APIs instead of hardcoded placeholder `/get` and `/post`
-    history = history.map(run => {
-      if (run.targetApis && run.targetApis.some(api => api.endsWith('/get') || api.endsWith('/post'))) {
-        let baseUrl = 'https://k6demo.manig.dev';
-        const existingGet = run.targetApis.find(api => api.startsWith('GET '));
-        if (existingGet) {
-          baseUrl = existingGet.substring(4).replace(/\/get$/, '');
-        }
-        run.targetApis = [
-          `POST ${baseUrl}/users`,
-          `GET ${baseUrl}/users/:id`,
-          `PATCH ${baseUrl}/users/:id`
-        ];
-      }
-      return run;
-    });
-  } catch (e) {
-    history = [];
-  }
-}
-
-// Add new run to the start of history array
-history.unshift(newRun);
-
-// Filter out runs older than 30 days (30 * 24 * 60 * 60 * 1000 = 2592000000 ms)
-const thirtyDaysAgo = Date.now() - 2592000000;
-history = history.filter(run => new Date(run.timestamp).getTime() > thirtyDaysAgo);
-
-// Save updated history list
-fs.writeFileSync(runsJsonPath, JSON.stringify(history, null, 2));
-
-// Prune report files that are no longer in active runs list
-const activeReportPaths = new Set(history.map(run => path.basename(run.reportPath)));
-const files = fs.readdirSync(reportsDir);
-files.forEach(file => {
-  if (file.endsWith('.html') && !activeReportPaths.has(file)) {
-    try {
-      fs.unlinkSync(path.join(reportsDir, file));
-      console.log(`Pruned old report file: ${file}`);
-    } catch (e) {
-      console.error(`Failed to prune old report file ${file}:`, e);
-    }
-  }
-});
-
-// Compile and write dashboard index.html
-const dashboardHtml = generateDashboard(history);
-fs.writeFileSync(indexPath, dashboardHtml);
-
-console.log(`Successfully added run ${timestampId} to history and rebuilt dashboard.`);
-
-function generateDashboard(runs) {
-  return `<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -697,7 +469,7 @@ function generateDashboard(runs) {
 
   <script>
     // Embedded run database
-    const runsHistory = ${JSON.stringify(runs)};
+    const runsHistory = [{"id":1780214142950,"timestamp":"2026-05-31T07:55:42.950Z","timestampIST":"May 31, 2026, 1:25:42 PM","environment":"STAGING","profile":"FIXED","status":"PASSED","metrics":{"totalRequests":3,"failureRate":"0.00%","p95LatencyMs":"605.28 ms","customSuccessRate":"100.00%","customTxCount":3,"customP95LatencyMs":"660.70 ms","checks":"7 / 7 (100.00%)"},"thresholds":[{"name":"HTTP Errors Rate","expected":"< 10%","actual":"0.00%","status":"PASSED"},{"name":"95th Percentile Latency","expected":"< 3000 ms","actual":"605.28 ms","status":"PASSED"},{"name":"Validations (Checks) Rate","expected":"> 90%","actual":"100.00%","status":"PASSED"}],"targetApis":["POST https://k6demo.manig.dev/users","GET https://k6demo.manig.dev/users/:id","PATCH https://k6demo.manig.dev/users/:id"],"reportPath":"reports/run-1780214142950.html"},{"id":1780214130382,"timestamp":"2026-05-31T07:55:30.382Z","timestampIST":"May 31, 2026, 1:25:30 PM","environment":"STAGING","profile":"FIXED","status":"PASSED","metrics":{"totalRequests":30,"failureRate":"0.00%","p95LatencyMs":"676.36 ms","customSuccessRate":"100.00%","customTxCount":30,"customP95LatencyMs":"747.55 ms","checks":"70 / 70 (100.00%)"},"thresholds":[{"name":"HTTP Errors Rate","expected":"< 10%","actual":"0.00%","status":"PASSED"},{"name":"95th Percentile Latency","expected":"< 3000 ms","actual":"676.36 ms","status":"PASSED"},{"name":"Validations (Checks) Rate","expected":"> 90%","actual":"100.00%","status":"PASSED"}],"targetApis":["POST https://k6demo.manig.dev/users","GET https://k6demo.manig.dev/users/:id","PATCH https://k6demo.manig.dev/users/:id"],"reportPath":"reports/run-1780214130382.html"},{"id":1780213891376,"timestamp":"2026-05-31T07:51:31.376Z","timestampIST":"May 31, 2026, 1:21:31 PM","environment":"STAGING","profile":"FIXED","status":"PASSED","metrics":{"totalRequests":30,"failureRate":"0.00%","p95LatencyMs":"676.36 ms","customSuccessRate":"100.00%","customTxCount":30,"customP95LatencyMs":"747.55 ms","checks":"70 / 70 (100.00%)"},"thresholds":[{"name":"HTTP Errors Rate","expected":"< 10%","actual":"0.00%","status":"PASSED"},{"name":"95th Percentile Latency","expected":"< 3000 ms","actual":"676.36 ms","status":"PASSED"},{"name":"Validations (Checks) Rate","expected":"> 90%","actual":"100.00%","status":"PASSED"}],"targetApis":["POST https://k6demo.manig.dev/users","GET https://k6demo.manig.dev/users/:id","PATCH https://k6demo.manig.dev/users/:id"],"reportPath":"reports/run-1780213891376.html"}];
     
     document.getElementById('generation-time').innerText = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }) + ' IST';
 
@@ -722,23 +494,23 @@ function generateDashboard(runs) {
       
       filtered.forEach(run => {
         const card = document.createElement('div');
-        card.className = \`run-card \${activeRunId === run.id ? 'active' : ''}\`;
+        card.className = `run-card ${activeRunId === run.id ? 'active' : ''}`;
         card.onclick = () => selectRun(run.id);
         
         const envClass = run.environment === 'PRODUCTION' ? 'env-production' : 'env-staging';
         const badgeClass = run.status === 'PASSED' ? 'badge-passed' : 'badge-failed';
         
-        card.innerHTML = \`
+        card.innerHTML = `
           <div class="card-row-1">
-            <span class="env-pill \${envClass}">\${run.environment}</span>
-            <span class="badge \${badgeClass}">\${run.status}</span>
+            <span class="env-pill ${envClass}">${run.environment}</span>
+            <span class="badge ${badgeClass}">${run.status}</span>
           </div>
-          <div class="card-row-2">Profile: \${run.profile}</div>
+          <div class="card-row-2">Profile: ${run.profile}</div>
           <div class="card-row-3">
-            <span>\${run.timestampIST} IST</span>
-            <span>Reqs: \${run.metrics.totalRequests}</span>
+            <span>${run.timestampIST} IST</span>
+            <span>Reqs: ${run.metrics.totalRequests}</span>
           </div>
-        \`;
+        `;
         container.appendChild(card);
       });
     }
@@ -757,14 +529,14 @@ function generateDashboard(runs) {
       run.thresholds.forEach(t => {
         const statusClass = t.status === 'PASSED' ? 'status-text-passed' : 'status-text-failed';
         const indicator = t.status === 'PASSED' ? '✓' : '✗';
-        thresholdsRows += \`
+        thresholdsRows += `
           <tr>
-            <td><strong>\${t.name}</strong></td>
-            <td>\${t.expected}</td>
-            <td>\${t.actual}</td>
-            <td><span class="table-status \${statusClass}">\${indicator} \${t.status}</span></td>
+            <td><strong>${t.name}</strong></td>
+            <td>${t.expected}</td>
+            <td>${t.actual}</td>
+            <td><span class="table-status ${statusClass}">${indicator} ${t.status}</span></td>
           </tr>
-        \`;
+        `;
       });
       
       let apiItems = '';
@@ -777,28 +549,28 @@ function generateDashboard(runs) {
         if (method === 'POST') badgeClass = 'method-post';
         else if (method === 'PATCH') badgeClass = 'method-patch';
         
-        const badge = \`<span class="method-badge \${badgeClass}">\${method}</span>\`;
-        const url = api.replace(/^(GET|POST|PATCH)\\s+/, '');
-        apiItems += \`
+        const badge = `<span class="method-badge ${badgeClass}">${method}</span>`;
+        const url = api.replace(/^(GET|POST|PATCH)\s+/, '');
+        apiItems += `
           <li class="api-item">
-            \${badge}
-            <span>\${url}</span>
+            ${badge}
+            <span>${url}</span>
           </li>
-        \`;
+        `;
       });
       
-      detailsContainer.innerHTML = \`
+      detailsContainer.innerHTML = `
         <div class="run-header-card">
           <div class="header-details-left">
             <div class="run-title">
-              Execution Run #\${run.id}
-              <span class="badge \${badgeClass}">\${run.status}</span>
-              <span class="env-pill \${envClass}">\${run.environment}</span>
+              Execution Run #${run.id}
+              <span class="badge ${badgeClass}">${run.status}</span>
+              <span class="env-pill ${envClass}">${run.environment}</span>
             </div>
-            <div class="run-subtitle">Executed on <strong>\${run.timestampIST} IST</strong> with profile <strong>\${run.profile}</strong></div>
+            <div class="run-subtitle">Executed on <strong>${run.timestampIST} IST</strong> with profile <strong>${run.profile}</strong></div>
           </div>
           <div>
-            <a href="\${run.reportPath}" class="btn-report" target="_blank">
+            <a href="${run.reportPath}" class="btn-report" target="_blank">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" style="width:16px;height:16px;">
                 <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 0 0 3 8.25v10.5A2.25 2.25 0 0 0 5.25 21h10.5A2.25 2.25 0 0 0 18 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
               </svg>
@@ -810,19 +582,19 @@ function generateDashboard(runs) {
         <div class="metrics-grid">
           <div class="metric-card">
             <span class="metric-card-label">Total Requests Fired</span>
-            <span class="metric-card-value">\${run.metrics.totalRequests}</span>
+            <span class="metric-card-value">${run.metrics.totalRequests}</span>
           </div>
           <div class="metric-card">
             <span class="metric-card-label">95th Percentile Latency</span>
-            <span class="metric-card-value">\${run.metrics.p95LatencyMs}</span>
+            <span class="metric-card-value">${run.metrics.p95LatencyMs}</span>
           </div>
           <div class="metric-card">
             <span class="metric-card-label">HTTP Request Failure Rate</span>
-            <span class="metric-card-value">\${run.metrics.failureRate}</span>
+            <span class="metric-card-value">${run.metrics.failureRate}</span>
           </div>
           <div class="metric-card">
             <span class="metric-card-label">Validations Check Success</span>
-            <span class="metric-card-value">\${run.metrics.customSuccessRate}</span>
+            <span class="metric-card-value">${run.metrics.customSuccessRate}</span>
           </div>
         </div>
 
@@ -839,7 +611,7 @@ function generateDashboard(runs) {
                 </tr>
               </thead>
               <tbody>
-                \${thresholdsRows}
+                ${thresholdsRows}
               </tbody>
             </table>
           </div>
@@ -849,11 +621,11 @@ function generateDashboard(runs) {
           <h3 class="section-title">Target APIs Tested</h3>
           <div class="content-box">
             <ul class="api-list">
-              \${apiItems}
+              ${apiItems}
             </ul>
           </div>
         </div>
-      \`;
+      `;
     }
 
     // Search input handler
@@ -871,5 +643,4 @@ function generateDashboard(runs) {
     }
   </script>
 </body>
-</html>`;
-}
+</html>
