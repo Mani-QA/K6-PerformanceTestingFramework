@@ -2,15 +2,15 @@
   "name": "k6-performance-testing-framework",
   "version": "1.0.0",
   "description": "Production-ready K6 performance testing boilerplate framework adhering strictly to Grafana best practices",
-  "main": "tests/api-test.js",
+  "main": "tests/nova-user-test.js",
   "type": "module",
   "scripts": {
-    "test:fixed:staging": "cross-env K6_ENV=staging K6_PROFILE=fixed k6 run tests/api-test.js",
-    "test:fixed:prod": "cross-env K6_ENV=production K6_PROFILE=fixed k6 run tests/api-test.js",
-    "test:rampup:staging": "cross-env K6_ENV=staging K6_PROFILE=ramp-up k6 run tests/api-test.js",
-    "test:rampup:prod": "cross-env K6_ENV=production K6_PROFILE=ramp-up k6 run tests/api-test.js",
-    "test:spike:staging": "cross-env K6_ENV=staging K6_PROFILE=spike k6 run tests/api-test.js",
-    "test:spike:prod": "cross-env K6_ENV=production K6_PROFILE=spike k6 run tests/api-test.js"
+    "test:fixed:staging": "cross-env K6_ENV=staging K6_PROFILE=fixed k6 run tests/nova-user-test.js",
+    "test:fixed:prod": "cross-env K6_ENV=production K6_PROFILE=fixed k6 run tests/nova-user-test.js",
+    "test:rampup:staging": "cross-env K6_ENV=staging K6_PROFILE=ramp-up k6 run tests/nova-user-test.js",
+    "test:rampup:prod": "cross-env K6_ENV=production K6_PROFILE=ramp-up k6 run tests/nova-user-test.js",
+    "test:spike:staging": "cross-env K6_ENV=staging K6_PROFILE=spike k6 run tests/nova-user-test.js",
+    "test:spike:prod": "cross-env K6_ENV=production K6_PROFILE=spike k6 run tests/nova-user-test.js"
   },
   "devDependencies": {
     "cross-env": "^7.0.3"

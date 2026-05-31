@@ -10,6 +10,18 @@ import papaparse from 'https://jslib.k6.io/papaparse/5.1.1/index.js';
 // Statically open both CSV and JSON data sources to satisfy K6 compile requirements
 const usersJsonData = JSON.parse(open('../data/users.json'));
 const usersCsvRaw = open('../data/users.csv');
+const testUsersCsvRaw = open('../data/test-users.csv');
+
+export function loadTestUsersCSV() {
+  const parsed = papaparse.parse(testUsersCsvRaw, { header: true });
+  return parsed.data
+    .filter(row => row.name && row.email)
+    .map(row => ({
+      name: row.name.trim(),
+      email: row.email.trim(),
+      role: row.role.trim()
+    }));
+}
 
 export function loadTestData() {
   const format = __ENV.K6_DATA_FORMAT || 'json';

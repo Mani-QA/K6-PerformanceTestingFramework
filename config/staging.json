@@ -1,6 +1,6 @@
 {
   "environment": "staging",
-  "baseUrl": "https://httpbin.org",
+  "baseUrl": "https://k6demo.manig.dev",
   "timeout": "10000",
   "maxRedirects": 3
 }

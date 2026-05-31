@@ -1,0 +1,223 @@
+openapi: 3.0.0
+info:
+  title: NovaUser D1 REST API Wrapper
+  description: High-performance REST API wrapper for a Cloudflare D1 SQLite database, designed for K6 performance stress testing.
+  version: 1.0.0
+servers:
+  - url: https://k6demo.manig.dev
+    description: Production Cloudflare Workers Edge Node
+paths:
+  /users:
+    get:
+      summary: Get user directory list
+      description: Scans D1 database table and lists user records. Filters by search substring or access privilege role.
+      parameters:
+        - name: search
+          in: query
+          description: Substring match against name or email fields
+          required: false
+          schema:
+            type: string
+        - name: role
+          in: query
+          description: Access privilege role filter
+          required: false
+          schema:
+            type: string
+            enum: [Admin, Editor, Viewer]
+      responses:
+        '200':
+          description: A list of users matching query filters
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    post:
+      summary: Create new user record
+      description: Validates payload parameters, generates a cryptographically secure random UUID, and inserts the user into the D1 database.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreatePayload'
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    format: uuid
+                    example: b3900133-190f-41f6-9fa4-d929ee7a06ce
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /users/{id}:
+    get:
+      summary: Fetch user record by ID
+      description: Returns details of the user matching the secure random UUID path parameter.
+      parameters:
+        - name: id
+          in: path
+          description: The UUID of the user to fetch
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: User details found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+    patch:
+      summary: Dynamically update user record
+      description: Checks user existence and updates ONLY the provided fields securely. Must contain at least one field.
+      parameters:
+        - name: id
+          in: path
+          description: The UUID of the user to update
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdatePayload'
+      responses:
+        '200':
+          description: User updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        '400':
+          $ref: '#/components/responses/ValidationError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+components:
+  schemas:
+    User:
+      type: object
+      required:
+        - id
+        - name
+        - email
+        - role
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Secure random UUID generated on creation
+          example: b3900133-190f-41f6-9fa4-d929ee7a06ce
+        name:
+          type: string
+          description: User full name
+          example: John Doe
+        email:
+          type: string
+          format: email
+          description: User email address (non-unique to support load test iteration data)
+          example: john.doe@live.com
+        role:
+          type: string
+          enum: [Admin, Editor, Viewer]
+          description: System access privileges
+          example: Viewer
+
+    UserCreatePayload:
+      type: object
+      required:
+        - name
+        - email
+        - role
+      properties:
+        name:
+          type: string
+          minLength: 1
+          example: John Doe
+        email:
+          type: string
+          format: email
+          minLength: 1
+          example: john.doe@live.com
+        role:
+          type: string
+          enum: [Admin, Editor, Viewer]
+          example: Viewer
+
+    UserUpdatePayload:
+      type: object
+      description: Payload containing optional properties to update. At least one field must be supplied.
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          example: John Doe
+        email:
+          type: string
+          format: email
+          minLength: 1
+          example: john.doe@live.com
+        role:
+          type: string
+          enum: [Admin, Editor, Viewer]
+          example: Editor
+
+  responses:
+    ValidationError:
+      description: Provided request payload is missing required fields or has invalid types.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: Field "role" is required and must be a non-empty string
+    NotFoundError:
+      description: The specified user identifier was not found in the D1 SQLite database.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: User not found
+    ServerError:
+      description: An unexpected database write/read operation failure occurred at the edge.
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+                example: Database update error
