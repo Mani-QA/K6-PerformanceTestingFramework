@@ -1,5 +1,48 @@
 [
   {
+    "id": 1780214413960,
+    "timestamp": "2026-05-31T08:00:13.960Z",
+    "timestampIST": "May 31, 2026, 1:30:13 PM",
+    "environment": "STAGING",
+    "profile": "FIXED",
+    "status": "PASSED",
+    "metrics": {
+      "totalRequests": 2583,
+      "failureRate": "0.00%",
+      "p95LatencyMs": "547.09 ms",
+      "customSuccessRate": "100.00%",
+      "customTxCount": 2583,
+      "customP95LatencyMs": "546.80 ms",
+      "checks": "6027 / 6027 (100.00%)"
+    },
+    "thresholds": [
+      {
+        "name": "HTTP Errors Rate",
+        "expected": "< 10%",
+        "actual": "0.00%",
+        "status": "PASSED"
+      },
+      {
+        "name": "95th Percentile Latency",
+        "expected": "< 3000 ms",
+        "actual": "547.09 ms",
+        "status": "PASSED"
+      },
+      {
+        "name": "Validations (Checks) Rate",
+        "expected": "> 90%",
+        "actual": "100.00%",
+        "status": "PASSED"
+      }
+    ],
+    "targetApis": [
+      "POST https://k6demo.manig.dev/users",
+      "GET https://k6demo.manig.dev/users/:id",
+      "PATCH https://k6demo.manig.dev/users/:id"
+    ],
+    "reportPath": "reports/run-1780214413960.html"
+  },
+  {
     "id": 1780213682954,
     "timestamp": "2026-05-31T07:48:02.954Z",
     "timestampIST": "May 31, 2026, 1:18:02 PM",
@@ -36,8 +79,9 @@
       }
     ],
     "targetApis": [
-      "GET https://k6demo.manig.dev/get",
-      "POST https://k6demo.manig.dev/post"
+      "POST https://k6demo.manig.dev/users",
+      "GET https://k6demo.manig.dev/users/:id",
+      "PATCH https://k6demo.manig.dev/users/:id"
     ],
     "reportPath": "reports/run-1780213682954.html"
   },
@@ -78,8 +122,9 @@
       }
     ],
     "targetApis": [
-      "GET https://k6demo.manig.dev/get",
-      "POST https://k6demo.manig.dev/post"
+      "POST https://k6demo.manig.dev/users",
+      "GET https://k6demo.manig.dev/users/:id",
+      "PATCH https://k6demo.manig.dev/users/:id"
     ],
     "reportPath": "reports/run-1780213355635.html"
   },
@@ -120,8 +165,9 @@
       }
     ],
     "targetApis": [
-      "GET https://k6demo.manig.dev/get",
-      "POST https://k6demo.manig.dev/post"
+      "POST https://k6demo.manig.dev/users",
+      "GET https://k6demo.manig.dev/users/:id",
+      "PATCH https://k6demo.manig.dev/users/:id"
     ],
     "reportPath": "reports/run-1780212529773.html"
   },
@@ -162,8 +208,9 @@
       }
     ],
     "targetApis": [
-      "GET https://httpbin.org/get",
-      "POST https://httpbin.org/post"
+      "POST https://httpbin.org/users",
+      "GET https://httpbin.org/users/:id",
+      "PATCH https://httpbin.org/users/:id"
     ],
     "reportPath": "reports/run-1780201407887.html"
   },
@@ -204,8 +251,9 @@
       }
     ],
     "targetApis": [
-      "GET https://httpbin.org/get",
-      "POST https://httpbin.org/post"
+      "POST https://httpbin.org/users",
+      "GET https://httpbin.org/users/:id",
+      "PATCH https://httpbin.org/users/:id"
     ],
     "reportPath": "reports/run-1780167572028.html"
   },
@@ -246,8 +294,9 @@
       }
     ],
     "targetApis": [
-      "GET https://httpbin.org/get",
-      "POST https://httpbin.org/post"
+      "POST https://httpbin.org/users",
+      "GET https://httpbin.org/users/:id",
+      "PATCH https://httpbin.org/users/:id"
     ],
     "reportPath": "reports/run-1780167318290.html"
   },
@@ -288,8 +337,9 @@
       }
     ],
     "targetApis": [
-      "GET https://httpbin.org/get",
-      "POST https://httpbin.org/post"
+      "POST https://httpbin.org/users",
+      "GET https://httpbin.org/users/:id",
+      "PATCH https://httpbin.org/users/:id"
     ],
     "reportPath": "reports/run-1780167078263.html"
   },
@@ -330,8 +380,9 @@
       }
     ],
     "targetApis": [
-      "GET https://httpbin.org/get",
-      "POST https://httpbin.org/post"
+      "POST https://httpbin.org/users",
+      "GET https://httpbin.org/users/:id",
+      "PATCH https://httpbin.org/users/:id"
     ],
     "reportPath": "reports/run-1780166814062.html"
   },
@@ -372,8 +423,9 @@
       }
     ],
     "targetApis": [
-      "GET https://httpbin.org/get",
-      "POST https://httpbin.org/post"
+      "POST https://httpbin.org/users",
+      "GET https://httpbin.org/users/:id",
+      "PATCH https://httpbin.org/users/:id"
     ],
     "reportPath": "reports/run-1780166379877.html"
   },
@@ -414,8 +466,9 @@
       }
     ],
     "targetApis": [
-      "GET https://httpbin.test.k6.io/get",
-      "POST https://httpbin.test.k6.io/post"
+      "POST https://httpbin.test.k6.io/users",
+      "GET https://httpbin.test.k6.io/users/:id",
+      "PATCH https://httpbin.test.k6.io/users/:id"
     ],
     "reportPath": "reports/run-1780166059271.html"
   },
@@ -456,8 +509,9 @@
       }
     ],
     "targetApis": [
-      "GET https://httpbin.test.k6.io/get",
-      "POST https://httpbin.test.k6.io/post"
+      "POST https://httpbin.test.k6.io/users",
+      "GET https://httpbin.test.k6.io/users/:id",
+      "PATCH https://httpbin.test.k6.io/users/:id"
     ],
     "reportPath": "reports/run-1780165782263.html"
   },
@@ -498,8 +552,9 @@
       }
     ],
     "targetApis": [
-      "GET https://httpbin.test.k6.io/get",
-      "POST https://httpbin.test.k6.io/post"
+      "POST https://httpbin.test.k6.io/users",
+      "GET https://httpbin.test.k6.io/users/:id",
+      "PATCH https://httpbin.test.k6.io/users/:id"
     ],
     "reportPath": "reports/run-1780165536256.html"
   }
