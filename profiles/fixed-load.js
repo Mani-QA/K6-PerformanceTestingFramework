@@ -13,7 +13,7 @@ export const fixedLoadScenarios = {
 };
 
 export const fixedLoadThresholds = {
-  http_req_failed: ['rate < 0.10'], // Allow up to 10% errors for public rate-limited endpoints
-  http_req_duration: ['p(95) < 3000'], // Widen budget to 3000ms to avoid network jitter flakiness
-  custom_success_rate: ['rate > 0.90'], // Allow up to 10% failed validations
+  http_req_failed: ['rate < 0.05'], // Allow up to 5% errors for public rate-limited endpoints
+  http_req_duration: ['p(95) < 2000'], // Widen budget to 2000ms to avoid network jitter flakiness
+  custom_success_rate: ['rate > 0.95'], // Allow up to 5% failed validations
 };
