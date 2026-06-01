@@ -11,6 +11,7 @@
 
 import http from 'k6/http';
 import { check, sleep } from 'k6';
+import { b64encode } from 'k6/encoding';
 import { htmlReport } from 'https://raw.githubusercontent.com/benc-uk/k6-reporter/main/dist/bundle.js';
 import { textSummary } from 'https://jslib.k6.io/k6-summary/0.0.2/index.js';
 
@@ -68,25 +69,19 @@ logger.info('Initialized NovaUser K6 Performance Test Script', {
 });
 
 /**
- * Maps raw CSV job roles (e.g. "Product Designer") to valid API roles (Admin, Editor, Viewer).
- * Done deterministically to maintain user-level data balance.
+ * Helper to construct IST Date string YYYY-MM-DD and generate Authorization token
  */
-function getValidApiRole(csvRole) {
-  const cleanRole = (csvRole || '').trim().toLowerCase();
-  // Provide deterministic mapping based on string value
-  const hash = cleanRole.length % 3;
-  if (hash === 0) return 'Admin';
-  if (hash === 1) return 'Editor';
-  return 'Viewer';
-}
-
-/**
- * Helper to select a new role different from the current one to test PATCH transitions.
- */
-function getAlternativeApiRole(currentRole) {
-  if (currentRole === 'Admin') return 'Editor';
-  if (currentRole === 'Editor') return 'Viewer';
-  return 'Admin';
+function getAuthHeaderValue(salt) {
+  const d = new Date();
+  // Shift by 5.5 hours to represent Indian Standard Time (IST)
+  const istEpochMs = d.getTime() + (5.5 * 60 * 60 * 1000);
+  const istDate = new Date(istEpochMs);
+  const year = istDate.getUTCFullYear();
+  const month = String(istDate.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(istDate.getUTCDate()).padStart(2, '0');
+  const dateStr = `${year}-${month}-${day}`;
+  
+  return b64encode(`${dateStr}${salt}`);
 }
 
 // VU execution context
@@ -100,13 +95,17 @@ export default function () {
   // Retrieve sequential mock user from the parsed test-users CSV
   const csvUser = getVuSequentialUser(testUsers, vuId);
   
-  // Map job title role to API supported roles
-  const initialRole = getValidApiRole(csvUser.role);
+  // Since the API accepts freeform roles, we use the raw CSV role directly
+  const initialRole = (csvUser.role || '').trim();
+  
+  // Create authentication token
+  const authHeaderValue = getAuthHeaderValue('k6demo-magic-salt-2026');
   
   const headers = {
     'Content-Type': 'application/json',
     'User-Agent': 'K6-NovaUser-Performance-Framework',
-    'Accept': 'application/json'
+    'Accept': 'application/json',
+    'X-Authorization': authHeaderValue
   };
   
   const requestParams = {
@@ -221,7 +220,7 @@ export default function () {
   // TRANSACTION 3: PATCH /users/:id (Modify User Privilege)
   // ----------------------------------------------------
   const patchUrl = `${config.baseUrl}/users/${userId}`;
-  const updatedRole = getAlternativeApiRole(initialRole);
+  const updatedRole = `${initialRole} (Updated)`;
   
   const patchPayload = JSON.stringify({
     role: updatedRole

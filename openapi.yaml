@@ -4,8 +4,10 @@ info:
   description: High-performance REST API wrapper for a Cloudflare D1 SQLite database, designed for K6 performance stress testing.
   version: 1.0.0
 servers:
-  - url: https://k6demo.manig.dev
+  - url: https://k6-demo.www5.workers.dev
     description: Production Cloudflare Workers Edge Node
+security:
+  - ApiKeyAuth: []
 paths:
   /users:
     get:
@@ -24,7 +26,6 @@ paths:
           required: false
           schema:
             type: string
-            enum: [Admin, Editor, Viewer]
       responses:
         '200':
           description: A list of users matching query filters
@@ -146,9 +147,8 @@ components:
           example: john.doe@live.com
         role:
           type: string
-          enum: [Admin, Editor, Viewer]
           description: System access privileges
-          example: Viewer
+          example: Software Engineer
 
     UserCreatePayload:
       type: object
@@ -168,8 +168,7 @@ components:
           example: john.doe@live.com
         role:
           type: string
-          enum: [Admin, Editor, Viewer]
-          example: Viewer
+          example: Software Engineer
 
     UserUpdatePayload:
       type: object
@@ -187,8 +186,7 @@ components:
           example: john.doe@live.com
         role:
           type: string
-          enum: [Admin, Editor, Viewer]
-          example: Editor
+          example: Software Engineer
 
   responses:
     ValidationError:
@@ -221,3 +219,11 @@ components:
               error:
                 type: string
                 example: Database update error
+
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-Authorization
+      description: Base64 encoding of the current date as per IST (YYYY-MM-DD) concatenated with the secure SALT.
+
