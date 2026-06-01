@@ -11,6 +11,7 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { b64encode } from 'k6/encoding';
+import exec from 'k6/execution';
 import { htmlReport } from 'https://raw.githubusercontent.com/benc-uk/k6-reporter/main/dist/bundle.js';
 import { textSummary } from 'https://jslib.k6.io/k6-summary/0.0.2/index.js';
 
@@ -83,6 +84,20 @@ function getAuthHeaderValue(salt) {
   return b64encode(`${dateStr}${salt}`);
 }
 
+/**
+ * Helper to find a different role from the CSV dataset
+ */
+function getDifferentRoleFromCsv(dataset, currentRole, startIndex) {
+  for (let i = 1; i < dataset.length; i++) {
+    const nextIndex = (startIndex + i) % dataset.length;
+    const candidateRole = (dataset[nextIndex].role || '').trim();
+    if (candidateRole && candidateRole.toLowerCase() !== currentRole.toLowerCase()) {
+      return candidateRole;
+    }
+  }
+  return `${currentRole} (Updated)`;
+}
+
 // VU execution context
 export default function () {
   const vuId = __VU;
@@ -91,8 +106,9 @@ export default function () {
   // Track active VUs dynamically using our custom Gauge metric
   customActiveVus.add(vuId);
   
-  // Retrieve sequential mock user from the parsed test-users CSV
-  const csvUser = getVuSequentialUser(testUsers, vuId);
+  // Retrieve sequential mock user from the parsed test-users CSV using global iteration index across all VUs
+  const globalIteration = exec.scenario.iterationInTest;
+  const csvUser = testUsers[globalIteration % testUsers.length];
   
   // Since the API accepts freeform roles, we use the raw CSV role directly
   const initialRole = (csvUser.role || '').trim();
@@ -219,7 +235,7 @@ export default function () {
   // TRANSACTION 3: PATCH /users/:id (Modify User Privilege)
   // ----------------------------------------------------
   const patchUrl = `${config.baseUrl}/users/${userId}`;
-  const updatedRole = `${initialRole} (Updated)`;
+  const updatedRole = getDifferentRoleFromCsv(testUsers, initialRole, globalIteration);
   
   const patchPayload = JSON.stringify({
     role: updatedRole
