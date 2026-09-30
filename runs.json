@@ -1,5 +1,48 @@
 [
   {
+    "id": 1790744575224,
+    "timestamp": "2026-09-30T05:02:55.224Z",
+    "timestampIST": "Sep 30, 2026, 10:32:55 AM",
+    "environment": "STAGING",
+    "profile": "FIXED",
+    "status": "PASSED",
+    "metrics": {
+      "totalRequests": 2538,
+      "failureRate": "0.00%",
+      "p95LatencyMs": "664.94 ms",
+      "customSuccessRate": "100.00%",
+      "customTxCount": 2538,
+      "customP95LatencyMs": "665.15 ms",
+      "checks": "5922 / 5922 (100.00%)"
+    },
+    "thresholds": [
+      {
+        "name": "HTTP Errors Rate",
+        "expected": "< 5%",
+        "actual": "0.00%",
+        "status": "PASSED"
+      },
+      {
+        "name": "95th Percentile Latency",
+        "expected": "< 2000 ms",
+        "actual": "664.94 ms",
+        "status": "PASSED"
+      },
+      {
+        "name": "Validations (Checks) Rate",
+        "expected": "> 95%",
+        "actual": "100.00%",
+        "status": "PASSED"
+      }
+    ],
+    "targetApis": [
+      "POST https://k6demo.manig.dev/users",
+      "GET https://k6demo.manig.dev/users/:id",
+      "PATCH https://k6demo.manig.dev/users/:id"
+    ],
+    "reportPath": "reports/run-1790744575224.html"
+  },
+  {
     "id": 1790658892327,
     "timestamp": "2026-09-29T05:14:52.327Z",
     "timestampIST": "Sep 29, 2026, 10:44:52 AM",
@@ -1245,48 +1288,5 @@
       "PATCH https://k6demo.manig.dev/users/:id"
     ],
     "reportPath": "reports/run-1788237269281.html"
-  },
-  {
-    "id": 1788152159088,
-    "timestamp": "2026-08-31T04:55:59.088Z",
-    "timestampIST": "Aug 31, 2026, 10:25:59 AM",
-    "environment": "STAGING",
-    "profile": "FIXED",
-    "status": "PASSED",
-    "metrics": {
-      "totalRequests": 2542,
-      "failureRate": "0.04%",
-      "p95LatencyMs": "785.42 ms",
-      "customSuccessRate": "99.96%",
-      "customTxCount": 2541,
-      "customP95LatencyMs": "794.75 ms",
-      "checks": "5929 / 5932 (99.95%)"
-    },
-    "thresholds": [
-      {
-        "name": "HTTP Errors Rate",
-        "expected": "< 5%",
-        "actual": "0.04%",
-        "status": "PASSED"
-      },
-      {
-        "name": "95th Percentile Latency",
-        "expected": "< 2000 ms",
-        "actual": "785.42 ms",
-        "status": "PASSED"
-      },
-      {
-        "name": "Validations (Checks) Rate",
-        "expected": "> 95%",
-        "actual": "99.96%",
-        "status": "PASSED"
-      }
-    ],
-    "targetApis": [
-      "POST https://k6demo.manig.dev/users",
-      "GET https://k6demo.manig.dev/users/:id",
-      "PATCH https://k6demo.manig.dev/users/:id"
-    ],
-    "reportPath": "reports/run-1788152159088.html"
   }
 ]
