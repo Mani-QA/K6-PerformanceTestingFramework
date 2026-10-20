@@ -1,5 +1,48 @@
 [
   {
+    "id": 1792470094670,
+    "timestamp": "2026-10-20T04:21:34.670Z",
+    "timestampIST": "Oct 20, 2026, 9:51:34 AM",
+    "environment": "STAGING",
+    "profile": "FIXED",
+    "status": "PASSED",
+    "metrics": {
+      "totalRequests": 2706,
+      "failureRate": "0.00%",
+      "p95LatencyMs": "526.88 ms",
+      "customSuccessRate": "100.00%",
+      "customTxCount": 2706,
+      "customP95LatencyMs": "526.75 ms",
+      "checks": "6314 / 6314 (100.00%)"
+    },
+    "thresholds": [
+      {
+        "name": "HTTP Errors Rate",
+        "expected": "< 5%",
+        "actual": "0.00%",
+        "status": "PASSED"
+      },
+      {
+        "name": "95th Percentile Latency",
+        "expected": "< 2000 ms",
+        "actual": "526.88 ms",
+        "status": "PASSED"
+      },
+      {
+        "name": "Validations (Checks) Rate",
+        "expected": "> 95%",
+        "actual": "100.00%",
+        "status": "PASSED"
+      }
+    ],
+    "targetApis": [
+      "POST https://k6demo.manig.dev/users",
+      "GET https://k6demo.manig.dev/users/:id",
+      "PATCH https://k6demo.manig.dev/users/:id"
+    ],
+    "reportPath": "reports/run-1792470094670.html"
+  },
+  {
     "id": 1792382918900,
     "timestamp": "2026-10-19T04:08:38.900Z",
     "timestampIST": "Oct 19, 2026, 9:38:38 AM",
